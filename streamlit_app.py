@@ -1,9 +1,9 @@
-# streamlit_app.py
 
+# streamlit_app.py
+# Tetris adaptado para Streamlit
 import streamlit as st
 import random
 
-# ─── Parâmetros ─────────────────────
 LARGURA = 10
 ALTURA = 20
 
@@ -17,7 +17,6 @@ PECAS = {
     "Z": [[1,1,0], [0,1,1]]
 }
 
-# ─── Inicialização ─────────────────────
 if "tabuleiro" not in st.session_state:
     st.session_state.tabuleiro = [[0]*LARGURA for _ in range(ALTURA)]
     st.session_state.peca = random.choice(list(PECAS.values()))
@@ -26,7 +25,6 @@ if "tabuleiro" not in st.session_state:
     st.session_state.jogo_ativo = True
     st.session_state.score = 0
 
-# ─── Funções ─────────────────────
 def desenhar_tabuleiro():
     linhas = ""
     for i in range(ALTURA):
@@ -93,7 +91,6 @@ def colisao():
                     return True
     return False
 
-# ─── Interface ─────────────────────
 st.title("🎮 Tetris com Streamlit")
 
 if st.session_state.jogo_ativo:
