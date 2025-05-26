@@ -1,2 +1,3 @@
 streamlit
+streamlit_events
 streamlit-keyup
