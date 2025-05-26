@@ -2,7 +2,7 @@ import streamlit as st
 import time
 import random
 import copy
-import streamlit.components.v1 as components # Adicionado para o listener de teclado
+from st_keyup import st_keyup # Adicionado para input do teclado
 
 # ─────────────────────────────────────────────
 # PARÂMETROS GERAIS
@@ -14,11 +14,12 @@ LINHA_VAZIA  = "<!" + " ." * 10 + " !>"
 EMPTY_CELL = " ."
 BLOCK_CELL = "[]" # Usar string consistente para blocos
 
-BASE_SLEEP   = 0.05      # intervalo base do loop (usado para calcular velocidade)
-LEVEL_STEP   = 30        # segundos para subir de nível
-SPEED_STEP   = 0.005     # quanto reduz o sleep a cada nível
-MIN_SLEEP    = 0.02      # limite inferior
-DROP_MOD     = 4         # A peça desce a cada X "ticks" lógicos (usado no cálculo do game_speed_interval)
+BASE_SLEEP   = 0.05     # intervalo base do loop (usado para calcular velocidade)
+LEVEL_STEP   = 30       # segundos para subir de nível
+SPEED_STEP   = 0.005    # quanto reduz o sleep a cada nível
+MIN_SLEEP    = 0.02     # limite inferior
+DROP_MOD     = 4        # A peça desce a cada X "ticks" lógicos (usado no cálculo do game_speed_interval)
+KEYBOARD_DEBOUNCE = 50 # Debounce em ms para input do teclado
 
 def linha_texto(txt: str) -> str:
     return "<!" + txt.center(INNER_W) + " !>"
@@ -50,7 +51,7 @@ def formatar_tabuleiro_para_exibicao(tab_data_game_area, proxima_peca_preview=No
 
     # Preview Area
     linhas_finais.append(linha_texto("PRÓXIMA PEÇA"))
-    preview_altura_render = PREVIEW_ROWS -1
+    preview_altura_render = PREVIEW_ROWS -1 
     preview_display_area = [[' ' for _ in range(INNER_W)] for _ in range(preview_altura_render)]
 
     if proxima_peca_preview:
@@ -72,17 +73,17 @@ def formatar_tabuleiro_para_exibicao(tab_data_game_area, proxima_peca_preview=No
         linhas_finais.append(linha_texto("".join(r_preview)))
 
     # Game Area
-    tab_render = copy.deepcopy(tab_data_game_area)
+    tab_render = copy.deepcopy(tab_data_game_area) 
 
     if current_peca_info and current_peca_info.get('peca_atual'):
         peca_atual = current_peca_info['peca_atual']
         peca_x = current_peca_info['x']
-        peca_y_display = current_peca_info['y_display']
+        peca_y_display = current_peca_info['y_display'] 
         
         for r_idx, linha_peca in enumerate(peca_atual):
             for c_idx, bloco in enumerate(linha_peca):
                 if bloco == BLOCK_CELL:
-                    abs_r = peca_y_display - r_idx
+                    abs_r = peca_y_display - r_idx  
                     abs_c = peca_x + c_idx
                     if 0 <= abs_r < GAME_ROWS and 0 <= abs_c < (INNER_W // 2):
                         tab_render[abs_r][abs_c] = BLOCK_CELL
@@ -93,7 +94,7 @@ def formatar_tabuleiro_para_exibicao(tab_data_game_area, proxima_peca_preview=No
     # Rodapé e Info
     linhas_finais.append("<!=-=-=-=-=-=-=-=-=-=-=!>")
     linhas_finais.append("\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/\\/")
-    if player_id is None:
+    if player_id is None: 
         linhas_finais.append(linha_texto(f"SCORE: {score:05}"))
         linhas_finais.append(linha_texto(f"NÍVEL: {level}"))
     
@@ -108,7 +109,7 @@ def piece_to_preview_lines(peca_data):
     for row in peca_data:
         linha_str = ""
         for cell in row:
-            linha_str += BLOCK_CELL if cell == BLOCK_CELL else "  "
+            linha_str += BLOCK_CELL if cell == BLOCK_CELL else "  " 
         linhas.append(linha_str.rstrip())
     
     larg_max = max((len(s) for s in linhas), default=0)
@@ -123,15 +124,15 @@ def colisao(tab_game_data, peca, x_peca, y_peca_display):
     for r_idx_peca, linha_p in enumerate(peca):
         for c_idx_peca, bloco in enumerate(linha_p):
             if bloco == BLOCK_CELL:
-                tab_r = y_peca_display - r_idx_peca
+                tab_r = y_peca_display - r_idx_peca  
                 tab_c = x_peca + c_idx_peca
 
-                if not (0 <= tab_c < (INNER_W // 2)):
-                    return True
+                if not (0 <= tab_c < (INNER_W // 2)): 
+                    return True  
                 if tab_r >= GAME_ROWS: # Colisão com o fundo
                     return True
                 if tab_r < 0: # Acima do topo, não é colisão para peça caindo
-                    continue
+                    continue 
 
                 if tab_game_data[tab_r][tab_c] == BLOCK_CELL:
                     return True
@@ -141,11 +142,11 @@ def colisao_topo_game_over(tab_game_data, peca, x_peca, y_peca_display_inicial):
     for r_idx_peca, linha_p in enumerate(peca):
         for c_idx_peca, bloco in enumerate(linha_p):
             if bloco == BLOCK_CELL:
-                tab_r = y_peca_display_inicial - r_idx_peca
+                tab_r = y_peca_display_inicial - r_idx_peca  
                 tab_c = x_peca + c_idx_peca
                 if 0 <= tab_r < GAME_ROWS and 0 <= tab_c < (INNER_W // 2):
                     if tab_game_data[tab_r][tab_c] == BLOCK_CELL:
-                        return True
+                        return True  
     return False
 
 
@@ -157,12 +158,12 @@ def fixar_peca_no_tabuleiro(tab_game_data, peca, x_peca, y_peca_display):
                 tab_c = x_peca + c_idx_peca
                 if 0 <= tab_r < GAME_ROWS and 0 <= tab_c < (INNER_W // 2):
                     tab_game_data[tab_r][tab_c] = BLOCK_CELL
-    return tab_game_data
+    return tab_game_data  
 
 def limpar_linhas_completas(tab_game_data):
     linhas_a_manter = []
     linhas_limpas = 0
-    for r in range(GAME_ROWS -1, -1, -1):
+    for r in range(GAME_ROWS -1, -1, -1):  
         linha = tab_game_data[r]
         if EMPTY_CELL in linha:
             linhas_a_manter.append(linha)
@@ -172,7 +173,7 @@ def limpar_linhas_completas(tab_game_data):
     novas_linhas_topo = [[EMPTY_CELL for _ in range(INNER_W // 2)] for _ in range(linhas_limpas)]
     novo_tab_game_data = novas_linhas_topo + list(reversed(linhas_a_manter))
     
-    while len(novo_tab_game_data) < GAME_ROWS:
+    while len(novo_tab_game_data) < GAME_ROWS: 
         novo_tab_game_data.insert(0, [EMPTY_CELL for _ in range(INNER_W // 2)])
     
     return novo_tab_game_data[:GAME_ROWS], linhas_limpas
@@ -188,13 +189,14 @@ def inicializar_estado_sessao():
 def _spawn_nova_peca(gs_dict_ou_prefixo, is_2p_player_num=None):
     if is_2p_player_num:
         gs = st.session_state[f'{gs_dict_ou_prefixo}{is_2p_player_num}']
+        # common_gs = st.session_state.game_2p_common # Para acesso ao level se necessário
     else:
         gs = st.session_state[gs_dict_ou_prefixo]
 
     gs['peca_atual'] = gs['proxima_peca']
-    gs['proxima_peca'] = random.choice(TODAS)
+    gs['proxima_peca'] = random.choice(TODAS) 
     gs['y_display'] = altura_peca(gs['peca_atual']) -1
-    gs['x'] = (INNER_W // 2) // 2 - largura_peca(gs['peca_atual']) // 2
+    gs['x'] = (INNER_W // 4) - largura_peca(gs['peca_atual']) // 2 # Ajustado para INNER_W // 4 (que é 10 / 2)
     gs['last_drop_time'] = time.time()
 
     if colisao_topo_game_over(gs['tab_data'], gs['peca_atual'], gs['x'], gs['y_display']):
@@ -208,13 +210,13 @@ def _spawn_nova_peca(gs_dict_ou_prefixo, is_2p_player_num=None):
         else: # Modo 1P
             gs['game_over'] = True
             st.balloons()
-        return False
+        return False 
     return True
 
 def inicializar_jogo_1p():
     st.session_state.game_1p = {
         "tab_data": criar_tabuleiro_data()["game"],
-        "proxima_peca": random.choice(TODAS),
+        "proxima_peca": random.choice(TODAS), 
         "score": 0,
         "level": 1,
         "start_time": time.time(),
@@ -230,9 +232,9 @@ def inicializar_jogo_2p():
         "level": 1,
         "start_time": time.time(),
         "paused": False,
-        "game_over_global": False,
+        "game_over_global": False,  
     }
-    for i in range(1, 3):
+    for i in range(1, 3):  
         st.session_state[f'game_2p_p{i}'] = {
             "tab_data": criar_tabuleiro_data()["game"],
             "proxima_peca": random.choice(TODAS),
@@ -256,44 +258,46 @@ def logica_jogo_1p_tick():
     
     game_speed_interval = max(MIN_SLEEP, BASE_SLEEP - (gs['level']-1)*SPEED_STEP) * DROP_MOD
 
-    force_drop = st.session_state.pop("force_drop_1p", False)
+    force_drop = st.session_state.pop("force_drop_1p", False) 
 
     if force_drop or (time.time() - gs.get('last_drop_time', gs['start_time']) > game_speed_interval) :
         if not colisao(gs['tab_data'], gs['peca_atual'], gs['x'], gs['y_display'] + 1):
             gs['y_display'] += 1
-            gs['last_drop_time'] = time.time()
+            gs['last_drop_time'] = time.time()  
         else:
             gs['tab_data'] = fixar_peca_no_tabuleiro(gs['tab_data'], gs['peca_atual'], gs['x'], gs['y_display'])
             gs['tab_data'], linhas_limpas = limpar_linhas_completas(gs['tab_data'])
-            gs['score'] += (linhas_limpas ** 2) * 100 if linhas_limpas > 0 else 0 # Pontuação ajustada (ex: 100 por linha^2)
-            if linhas_limpas == 1: gs['score'] +=10 # Bônus pequeno por uma linha
+            gs['score'] += (linhas_limpas ** 2) * 100 if linhas_limpas > 0 else 0 # Pontuação melhorada
 
-
-            if not _spawn_nova_peca('game_1p'):
-                return
+            if not _spawn_nova_peca('game_1p'): 
+                return 
 
 
 def handle_input_1p(action):
     gs = st.session_state.game_1p
-    if gs['game_over'] or gs['paused'] or not gs.get('peca_atual'):
+    if gs['game_over'] or gs['paused'] or not gs.get('peca_atual'): 
         return
 
     current_time = time.time()
-    
+    # moved = False # Não mais necessário com a lógica atual
+
     if action == "left":
-        if gs['x'] > 0 and not colisao(gs['tab_data'], gs['peca_atual'], gs['x'] - 1, gs['y_display']):
+        if not colisao(gs['tab_data'], gs['peca_atual'], gs['x'] - 1, gs['y_display']):
             gs['x'] -= 1
     elif action == "right":
-        if gs['x'] + largura_peca(gs['peca_atual']) < (INNER_W // 2) and not colisao(gs['tab_data'], gs['peca_atual'], gs['x'] + 1, gs['y_display']):
+        if not colisao(gs['tab_data'], gs['peca_atual'], gs['x'] + 1, gs['y_display']):
             gs['x'] += 1
     elif action == "down":
-        st.session_state.force_drop_1p = True
+        st.session_state.force_drop_1p = True  
     elif action == "rotate":
-        if current_time - gs.get('last_rot_time', 0) > 0.2: # Debounce para rotação
+        if current_time - gs.get('last_rot_time', 0) > 0.2:  
             peca_rotacionada = rotacionar(gs['peca_atual'])
             new_x = gs['x']
+            # Lógica de ajuste de parede (wall kick simples)
             if new_x + largura_peca(peca_rotacionada) > (INNER_W // 2):
                 new_x = (INNER_W // 2) - largura_peca(peca_rotacionada)
+            if new_x < 0: # Se sair pela esquerda
+                 new_x = 0
             
             if not colisao(gs['tab_data'], peca_rotacionada, new_x, gs['y_display']):
                 gs['peca_atual'] = peca_rotacionada
@@ -328,11 +332,9 @@ def logica_jogo_2p_tick_player(player_idx):
             player_gs['tab_data'] = fixar_peca_no_tabuleiro(player_gs['tab_data'], player_gs['peca_atual'], player_gs['x'], player_gs['y_display'])
             player_gs['tab_data'], linhas_limpas = limpar_linhas_completas(player_gs['tab_data'])
             player_gs['score'] += (linhas_limpas ** 2) * 100 if linhas_limpas > 0 else 0
-            if linhas_limpas == 1: player_gs['score'] +=10
-
 
             if not _spawn_nova_peca('game_2p_p', player_idx):
-                return
+                return 
 
 
 def handle_input_2p(player_idx, action):
@@ -343,21 +345,24 @@ def handle_input_2p(player_idx, action):
         return
 
     current_time = time.time()
+    # moved = False
 
     if action == "left":
-        if player_gs['x'] > 0 and not colisao(player_gs['tab_data'], player_gs['peca_atual'], player_gs['x'] - 1, player_gs['y_display']):
+        if not colisao(player_gs['tab_data'], player_gs['peca_atual'], player_gs['x'] - 1, player_gs['y_display']):
             player_gs['x'] -= 1
     elif action == "right":
-        if player_gs['x'] + largura_peca(player_gs['peca_atual']) < (INNER_W // 2) and not colisao(player_gs['tab_data'], player_gs['peca_atual'], player_gs['x'] + 1, player_gs['y_display']):
+        if not colisao(player_gs['tab_data'], player_gs['peca_atual'], player_gs['x'] + 1, player_gs['y_display']):
             player_gs['x'] += 1
     elif action == "down":
         st.session_state[f"force_drop_p{player_idx}"] = True
     elif action == "rotate":
-        if current_time - player_gs.get('last_rot_time', 0) > 0.2: # Debounce
+        if current_time - player_gs.get('last_rot_time', 0) > 0.2:
             peca_rotacionada = rotacionar(player_gs['peca_atual'])
             new_x = player_gs['x']
             if new_x + largura_peca(peca_rotacionada) > (INNER_W // 2):
                 new_x = (INNER_W // 2) - largura_peca(peca_rotacionada)
+            if new_x < 0:
+                 new_x = 0
 
             if not colisao(player_gs['tab_data'], peca_rotacionada, new_x, player_gs['y_display']):
                 player_gs['peca_atual'] = peca_rotacionada
@@ -374,8 +379,8 @@ def render_menu():
     st.title("TETRIS com Streamlit")
     st.markdown("---")
     st.subheader("Desenvolvido por: Gustavo de Almeida Leite")
-    st.caption("Matrícula: 202504002")
-    st.caption("BIA UFG - 2025 | IP - PROF. LEO")
+    st.caption("Matrícula: 202504002") # Fictício
+    st.caption("BIA UFG - 2025 | IP - PROF. LEO") # Fictício
     st.markdown("---")
 
     if st.button("🚀 Jogar 1 Player", key="menu_1p", use_container_width=True):
@@ -393,30 +398,38 @@ def render_menu():
         st.session_state.screen = "quit"
         st.rerun()
 
-def render_commands(): # ATUALIZADO
+def render_commands():
     st.header("📜 Comandos")
-    st.markdown("""
+    st.markdown(f"""
     ### Controles Gerais:
-    - **Pausar/Retomar (P)**: Use o botão na tela para pausar ou continuar o jogo.
-    - **Sair para Menu (Q)**: Use o botão na tela para encerrar a partida e retornar ao menu.
-    - **Níveis**: A dificuldade aumenta automaticamente.
-    - **Pontuação**: Complete linhas para ganhar pontos!
+    - Utilize os botões na tela ou o teclado para interagir.
+    - `Pausar/Retomar (Botão ou P - futuro)`: Pausa ou continua o jogo.
+    - `Sair para Menu (Botão ou Q - futuro)`: Encerra a partida atual e retorna ao menu.
 
-    ### Player 1 (Modo 1P ou Jogador 1 no Modo 2P):
+    ### Jogador 1 (Modo 1P ou Jogador 1 no Modo 2P):
     - **Teclado:**
-        - `Seta Esquerda (←)`: Mover peça para esquerda.
-        - `Seta Direita (→)`: Mover peça para direita.
-        - `Seta Cima (↑)`: Rotacionar a peça.
-        - `Seta Baixo (↓)`: Acelerar queda da peça.
-    - **Botões na tela:** Também podem ser usados.
+        - `Seta para Esquerda`: Mover peça para esquerda.
+        - `Seta para Direita`: Mover peça para direita.
+        - `Seta para Cima`: Rotacionar a peça atual.
+        - `Seta para Baixo`: Acelerar a queda da peça atual.
+    - **Botões na Tela:**
+        - `Botão Esquerda (⬅️)`: Mover peça para esquerda.
+        - `Botão Direita (➡️)`: Mover peça para direita.
+        - `Botão Girar (🔄)`: Rotacionar a peça atual.
+        - `Botão Descer (⬇️)`: Acelerar a queda da peça atual.
 
-    ### Player 2 (Apenas no Modo 2P):
+    ### Jogador 2 (Apenas no Modo 2P):
     - **Teclado:**
         - `A`: Mover peça para esquerda.
         - `D`: Mover peça para direita.
-        - `W`: Rotacionar a peça.
-        - `S`: Acelerar queda da peça.
-    - **Botões na tela:** Também podem ser usados.
+        - `W`: Rotacionar a peça atual.
+        - `S`: Acelerar a queda da peça atual.
+    - **Botões na Tela:**
+        - Controles similares aos do Jogador 1, localizados em sua respectiva área de jogo.
+    
+    ### Gameplay:
+    - **Níveis**: A dificuldade (velocidade de queda das peças) aumenta automaticamente a cada {LEVEL_STEP} segundos de jogo.
+    - **Pontuação**: Complete linhas para ganhar pontos! Múltiplas linhas de uma vez valem mais.
     """)
     if st.button("⬅️ Voltar ao Menu", key="cmd_back"):
         st.session_state.screen = "menu"
@@ -425,8 +438,23 @@ def render_commands(): # ATUALIZADO
 def render_game_1p():
     gs = st.session_state.game_1p
     
+    # Captura de input do teclado para Jogador 1
     if not gs['game_over'] and not gs['paused']:
-        logica_jogo_1p_tick()
+        pressed_key = st_keyup("ArrowUp ArrowDown ArrowLeft ArrowRight", debounce=KEYBOARD_DEBOUNCE, key="p1_keys_1p")
+        action = None
+        if pressed_key:
+            if pressed_key == "ArrowUp": action = "rotate"
+            elif pressed_key == "ArrowDown": action = "down"
+            elif pressed_key == "ArrowLeft": action = "left"
+            elif pressed_key == "ArrowRight": action = "right"
+            
+            if action:
+                handle_input_1p(action)
+                st.rerun() # Rerun para refletir a ação do teclado imediatamente
+                return # Sair da renderização atual pois o estado mudou
+
+    if not gs['game_over'] and not gs['paused']:
+        logica_jogo_1p_tick() # Tick normal do jogo se nenhuma tecla foi pressionada
 
     display_message = None
     if gs['game_over']:
@@ -435,62 +463,50 @@ def render_game_1p():
         display_message = "PAUSADO"
     
     current_peca_info_1p = None
-    if not gs['game_over'] and gs.get('peca_atual'):
+    if not gs['game_over'] and gs.get('peca_atual'): 
         current_peca_info_1p = {
-            "peca_atual": gs['peca_atual'],
-            "x": gs['x'],
-            "y_display": gs['y_display']
+            "peca_atual": gs['peca_atual'], "x": gs['x'], "y_display": gs['y_display']
         }
 
     tab_str = formatar_tabuleiro_para_exibicao(
-        gs['tab_data'],
-        gs['proxima_peca'],
-        gs['score'],
-        gs['level'],
-        display_message,
-        player_id=None,
-        current_peca_info=current_peca_info_1p
+        gs['tab_data'], gs['proxima_peca'], gs['score'], gs['level'],
+        display_message, player_id=None, current_peca_info=current_peca_info_1p
     )
     game_placeholder = st.empty()
     game_placeholder.code(tab_str, language="text")
-
 
     if gs['game_over']:
         st.error("FIM DE JOGO!")
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🔄 Novo Jogo (1P)", key="gameover_new_1p", use_container_width=True):
-                inicializar_jogo_1p()
-                st.rerun()
+                inicializar_jogo_1p(); st.rerun()
         with col2:
             if st.button("⬅️ Voltar ao Menu", key="gameover_menu_1p", use_container_width=True):
-                st.session_state.screen = "menu"
-                st.rerun()
+                st.session_state.screen = "menu"; st.rerun()
         return
 
     cols = st.columns(4)
-    if cols[0].button("⬅️ Esquerda", key="p1_left_btn", use_container_width=True, disabled=gs['paused']): # Chave do botão alterada
+    if cols[0].button("⬅️ Esquerda", key="btn_p1_left", use_container_width=True, disabled=gs['paused']):
         handle_input_1p("left"); st.rerun()
-    if cols[1].button("➡️ Direita", key="p1_right_btn", use_container_width=True, disabled=gs['paused']): # Chave do botão alterada
+    if cols[1].button("➡️ Direita", key="btn_p1_right", use_container_width=True, disabled=gs['paused']):
         handle_input_1p("right"); st.rerun()
-    if cols[2].button("🔄 Girar", key="p1_rotate_btn", use_container_width=True, disabled=gs['paused']): # Chave do botão alterada
+    if cols[2].button("🔄 Girar", key="btn_p1_rotate", use_container_width=True, disabled=gs['paused']):
         handle_input_1p("rotate"); st.rerun()
-    if cols[3].button("⬇️ Descer", key="p1_down_btn", use_container_width=True, disabled=gs['paused']): # Chave do botão alterada
+    if cols[3].button("⬇️ Descer", key="btn_p1_down", use_container_width=True, disabled=gs['paused']):
         handle_input_1p("down"); st.rerun()
 
     col_opts1, col_opts2 = st.columns(2)
-    if col_opts1.button("❚❚ Pausar/Retomar (P)" if not gs['paused'] else "▶️ Pausar/Retomar (P)", key="pause_1p", use_container_width=True):
+    if col_opts1.button("❚❚ Pausar/Retomar" if not gs['paused'] else "▶️ Pausar/Retomar", key="pause_1p", use_container_width=True):
         gs['paused'] = not gs['paused']
-        if not gs['paused']:
-            gs['last_drop_time'] = time.time()
+        if not gs['paused']: gs['last_drop_time'] = time.time()
         st.rerun()
     
-    if col_opts2.button("🚪 Sair para Menu (Q)", key="quit_1p", use_container_width=True):
-        st.session_state.screen = "menu"
-        st.rerun()
+    if col_opts2.button("🚪 Sair para Menu", key="quit_1p", use_container_width=True):
+        st.session_state.screen = "menu"; st.rerun()
 
     if not gs['game_over'] and not gs['paused']:
-        time.sleep(0.05) # Reduzido para melhor responsividade com teclado
+        time.sleep(0.05) # Reduzido para maior fluidez com inputs de teclado
         st.rerun()
 
 
@@ -499,13 +515,46 @@ def render_game_2p():
     p1_gs = st.session_state.game_2p_p1
     p2_gs = st.session_state.game_2p_p2
 
+    # Captura de input do teclado para 2 jogadores
+    if not common_gs['game_over_global'] and not common_gs['paused']:
+        # Jogador 1
+        if p1_gs['alive']:
+            pressed_key_p1 = st_keyup("ArrowUp ArrowDown ArrowLeft ArrowRight", debounce=KEYBOARD_DEBOUNCE, key="p1_keys_2p")
+            action_p1 = None
+            if pressed_key_p1:
+                if pressed_key_p1 == "ArrowUp": action_p1 = "rotate"
+                elif pressed_key_p1 == "ArrowDown": action_p1 = "down"
+                elif pressed_key_p1 == "ArrowLeft": action_p1 = "left"
+                elif pressed_key_p1 == "ArrowRight": action_p1 = "right"
+                if action_p1:
+                    handle_input_2p(1, action_p1)
+                    st.rerun(); return 
+        
+        # Jogador 2 (só processa se P1 não causou rerun)
+        if p2_gs['alive']:
+            pressed_key_p2 = st_keyup("w a s d W A S D", debounce=KEYBOARD_DEBOUNCE, key="p2_keys_2p") # Case insensitive check below
+            action_p2 = None
+            if pressed_key_p2:
+                key_lower = pressed_key_p2.lower()
+                if key_lower == "w": action_p2 = "rotate"
+                elif key_lower == "s": action_p2 = "down"
+                elif key_lower == "a": action_p2 = "left"
+                elif key_lower == "d": action_p2 = "right"
+                if action_p2:
+                    handle_input_2p(2, action_p2)
+                    st.rerun(); return
+
     if not common_gs['game_over_global'] and not common_gs['paused']:
         if p1_gs['alive']: logica_jogo_2p_tick_player(1)
         if p2_gs['alive']: logica_jogo_2p_tick_player(2)
     
     st.subheader(f"Nível Comum: {common_gs['level']}")
     if common_gs['paused']: st.warning("JOGO PAUSADO")
-    if common_gs['game_over_global']: st.error("FIM DE JOGO PARA AMBOS!")
+    if common_gs['game_over_global'] and not (not p1_gs['alive'] and not p2_gs['alive']): # Se game over mas alguém ainda estava "vivo" no tick anterior
+        pass # A lógica de game over global já tratou disso
+    elif common_gs['game_over_global']:
+         st.error("FIM DE JOGO PARA AMBOS!")
+
 
     game_area_placeholder = st.empty()
 
@@ -514,86 +563,63 @@ def render_game_2p():
 
         with col_p1:
             st.markdown("<h4 style='text-align: center;'>Jogador 1 (Setas)</h4>", unsafe_allow_html=True)
-            msg1 = None
-            current_peca_info_p1 = None
+            msg1 = None; current_peca_info_p1 = None
             if not p1_gs['alive']: msg1 = "ELIMINADO!"
             elif common_gs['paused']: msg1 = "PAUSADO"
             elif p1_gs.get('peca_atual'):
                 current_peca_info_p1 = {"peca_atual": p1_gs['peca_atual'], "x": p1_gs['x'], "y_display": p1_gs['y_display']}
-
-            tab_str_p1 = formatar_tabuleiro_para_exibicao(
-                p1_gs['tab_data'], p1_gs['proxima_peca'], player_id=1, msg_extra=msg1, current_peca_info=current_peca_info_p1
-            )
+            tab_str_p1 = formatar_tabuleiro_para_exibicao(p1_gs['tab_data'], p1_gs['proxima_peca'], player_id=1, msg_extra=msg1, current_peca_info=current_peca_info_p1)
             st.code(tab_str_p1, language="text")
-            
             if p1_gs['alive'] and not common_gs['game_over_global']:
                 btn_cols_p1 = st.columns(4)
-                if btn_cols_p1[0].button("⬅️ P1", key="p1_left_2p_btn", use_container_width=True, disabled=common_gs['paused']): # Chave do botão alterada
-                    handle_input_2p(1, "left"); st.rerun()
-                if btn_cols_p1[1].button("➡️ P1", key="p1_right_2p_btn", use_container_width=True, disabled=common_gs['paused']): # Chave do botão alterada
-                    handle_input_2p(1, "right"); st.rerun()
-                if btn_cols_p1[2].button("🔄 P1", key="p1_rotate_2p_btn", use_container_width=True, disabled=common_gs['paused']): # Chave do botão alterada
-                    handle_input_2p(1, "rotate"); st.rerun()
-                if btn_cols_p1[3].button("⬇️ P1", key="p1_down_2p_btn", use_container_width=True, disabled=common_gs['paused']): # Chave do botão alterada
-                    handle_input_2p(1, "down"); st.rerun()
+                if btn_cols_p1[0].button("⬅️ P1", key="btn_p1_left_2p", use_container_width=True, disabled=common_gs['paused']): handle_input_2p(1, "left"); st.rerun()
+                if btn_cols_p1[1].button("➡️ P1", key="btn_p1_right_2p", use_container_width=True, disabled=common_gs['paused']): handle_input_2p(1, "right"); st.rerun()
+                if btn_cols_p1[2].button("🔄 P1", key="btn_p1_rotate_2p", use_container_width=True, disabled=common_gs['paused']): handle_input_2p(1, "rotate"); st.rerun()
+                if btn_cols_p1[3].button("⬇️ P1", key="btn_p1_down_2p", use_container_width=True, disabled=common_gs['paused']): handle_input_2p(1, "down"); st.rerun()
         
         with col_score:
             st.markdown("<h4 style='text-align: center;'>Placar</h4>", unsafe_allow_html=True)
             st.markdown(f"<p style='font-size: 1.2em; text-align: center;'>P1: {p1_gs['score']:05}</p>", unsafe_allow_html=True)
             st.markdown(f"<p style='font-size: 1.2em; text-align: center;'>P2: {p2_gs['score']:05}</p>", unsafe_allow_html=True)
             st.markdown("---")
-            if st.button("❚❚ Pausar (P)" if not common_gs['paused'] else "▶️ Retomar (P)", key="pause_2p", use_container_width=True):
+            if st.button("❚❚ Pausar" if not common_gs['paused'] else "▶️ Retomar", key="pause_2p", use_container_width=True):
                 common_gs['paused'] = not common_gs['paused']
                 if not common_gs['paused']:
                     if p1_gs['alive']: p1_gs['last_drop_time'] = time.time()
                     if p2_gs['alive']: p2_gs['last_drop_time'] = time.time()
                 st.rerun()
-            if st.button("🚪 Sair Menu (Q)", key="quit_2p", use_container_width=True):
+            if st.button("🚪 Sair Menu", key="quit_2p", use_container_width=True):
                 st.session_state.screen = "menu"; st.rerun()
-
 
         with col_p2:
             st.markdown("<h4 style='text-align: center;'>Jogador 2 (ASDW)</h4>", unsafe_allow_html=True)
-            msg2 = None
-            current_peca_info_p2 = None
+            msg2 = None; current_peca_info_p2 = None
             if not p2_gs['alive']: msg2 = "ELIMINADO!"
             elif common_gs['paused']: msg2 = "PAUSADO"
             elif p2_gs.get('peca_atual'):
                 current_peca_info_p2 = {"peca_atual": p2_gs['peca_atual'], "x": p2_gs['x'], "y_display": p2_gs['y_display']}
-
-
-            tab_str_p2 = formatar_tabuleiro_para_exibicao(
-                p2_gs['tab_data'], p2_gs['proxima_peca'], player_id=2, msg_extra=msg2, current_peca_info=current_peca_info_p2
-            )
+            tab_str_p2 = formatar_tabuleiro_para_exibicao(p2_gs['tab_data'], p2_gs['proxima_peca'], player_id=2, msg_extra=msg2, current_peca_info=current_peca_info_p2)
             st.code(tab_str_p2, language="text")
-
             if p2_gs['alive'] and not common_gs['game_over_global']:
                 btn_cols_p2 = st.columns(4)
-                if btn_cols_p2[0].button("⬅️ P2", key="p2_left_2p_btn", use_container_width=True, disabled=common_gs['paused']): # Chave do botão alterada
-                    handle_input_2p(2, "left"); st.rerun()
-                if btn_cols_p2[1].button("➡️ P2", key="p2_right_2p_btn", use_container_width=True, disabled=common_gs['paused']): # Chave do botão alterada
-                    handle_input_2p(2, "right"); st.rerun()
-                if btn_cols_p2[2].button("🔄 P2", key="p2_rotate_2p_btn", use_container_width=True, disabled=common_gs['paused']): # Chave do botão alterada
-                    handle_input_2p(2, "rotate"); st.rerun()
-                if btn_cols_p2[3].button("⬇️ P2", key="p2_down_2p_btn", use_container_width=True, disabled=common_gs['paused']): # Chave do botão alterada
-                    handle_input_2p(2, "down"); st.rerun()
+                if btn_cols_p2[0].button("⬅️ P2", key="btn_p2_left_2p", use_container_width=True, disabled=common_gs['paused']): handle_input_2p(2, "left"); st.rerun()
+                if btn_cols_p2[1].button("➡️ P2", key="btn_p2_right_2p", use_container_width=True, disabled=common_gs['paused']): handle_input_2p(2, "right"); st.rerun()
+                if btn_cols_p2[2].button("🔄 P2", key="btn_p2_rotate_2p", use_container_width=True, disabled=common_gs['paused']): handle_input_2p(2, "rotate"); st.rerun()
+                if btn_cols_p2[3].button("⬇️ P2", key="btn_p2_down_2p", use_container_width=True, disabled=common_gs['paused']): handle_input_2p(2, "down"); st.rerun()
 
     if common_gs['game_over_global']:
         winner_msg = "Empate!"
         if p1_gs['score'] > p2_gs['score']: winner_msg = "Jogador 1 Vence!"
         elif p2_gs['score'] > p1_gs['score']: winner_msg = "Jogador 2 Vence!"
         st.subheader(winner_msg)
-
         col_gm_opts1, col_gm_opts2 = st.columns(2)
-        if col_gm_opts1.button("🔄 Novo Jogo (2P)", key="gameover_new_2p", use_container_width=True):
-            inicializar_jogo_2p(); st.rerun()
-        if col_gm_opts2.button("⬅️ Voltar ao Menu", key="gameover_menu_2p", use_container_width=True):
-            st.session_state.screen = "menu"; st.rerun()
+        if col_gm_opts1.button("🔄 Novo Jogo (2P)", key="gameover_new_2p", use_container_width=True): inicializar_jogo_2p(); st.rerun()
+        if col_gm_opts2.button("⬅️ Voltar ao Menu", key="gameover_menu_2p", use_container_width=True): st.session_state.screen = "menu"; st.rerun()
         return
 
     if not common_gs['game_over_global'] and not common_gs['paused']:
         if p1_gs['alive'] or p2_gs['alive']:
-            time.sleep(0.05) # Reduzido para melhor responsividade com teclado
+            time.sleep(0.05) # Reduzido para maior fluidez
             st.rerun()
 
 
@@ -604,90 +630,6 @@ def main():
     st.set_page_config(layout="wide", page_title="Streamlit Tetris by Gustavo L.")
     inicializar_estado_sessao()
 
-    # Inicializar estado para rastreamento de eventos de teclado
-    if 'last_event_timestamp' not in st.session_state: # Renomeado para evitar conflito com 'last_key_press' se usado em outro lugar
-        st.session_state.last_event_timestamp = None
-
-    # JavaScript para escutar eventos de teclado
-    # Usar event.code para teclas como Setas e para independência de layout (ex: "KeyW")
-    keyboard_listener_js = """
-<script>
-    // Garante que o listener seja anexado apenas uma vez
-    if (!window.streamlitKeyListenerAttached) {
-        document.addEventListener('keydown', function(event) {
-            const P1_CODES = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
-            const P2_CODES = ["KeyW", "KeyS", "KeyA", "KeyD"]; // Usando event.code
-            let action_code = event.code;
-
-            // Previne o comportamento padrão do navegador para as teclas do jogo (ex: rolar página)
-            if (P1_CODES.includes(action_code) || P2_CODES.includes(action_code)) {
-                // Verifica se o foco está em um campo de input para não interferir na digitação
-                // Para este jogo, vamos assumir que o listener global é aceitável
-                // e não há inputs de texto que seriam prejudicados.
-                // if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || document.activeElement.isContentEditable)) {
-                //    return; 
-                // }
-                event.preventDefault(); // Importante para setas não rolarem a página
-            }
-
-            // Envia o evento para o Python se for uma tecla de jogo
-            if (P1_CODES.includes(action_code) || P2_CODES.includes(action_code)) {
-                Streamlit.setComponentValue({
-                    type: "keydown",
-                    code: action_code,
-                    timestamp: new Date().getTime() // Timestamp para identificar eventos únicos
-                });
-            }
-        });
-        window.streamlitKeyListenerAttached = true; // Flag para indicar que o listener foi anexado
-    }
-</script>
-"""
-    # Renderiza o componente HTML (invisível) que contém o script JS
-    # A chave 'keyboard_listener_component' ajuda o Streamlit a gerenciar este componente
-    key_event_data = components.html(keyboard_listener_js, height=0, width=0, key="keyboard_listener_component")
-
-    # Processa o evento de teclado se um novo dado foi recebido do JS
-    if key_event_data and key_event_data.get('timestamp') != st.session_state.last_event_timestamp:
-        st.session_state.last_event_timestamp = key_event_data['timestamp'] # Atualiza o timestamp do último evento processado
-        code = key_event_data['code'] # Código da tecla (ex: "ArrowUp", "KeyW")
-        action_processed_by_keyboard = False
-
-        current_screen = st.session_state.screen
-
-        # Lógica para Player 1 (Setas)
-        if current_screen == "game_1p":
-            gs_1p = st.session_state.game_1p
-            if not gs_1p['game_over'] and not gs_1p['paused'] and gs_1p.get('peca_atual'):
-                if code == "ArrowUp": handle_input_1p("rotate"); action_processed_by_keyboard = True
-                elif code == "ArrowDown": handle_input_1p("down"); action_processed_by_keyboard = True
-                elif code == "ArrowLeft": handle_input_1p("left"); action_processed_by_keyboard = True
-                elif code == "ArrowRight": handle_input_1p("right"); action_processed_by_keyboard = True
-        elif current_screen == "game_2p":
-            common_gs_2p = st.session_state.game_2p_common
-            p1_gs_2p = st.session_state.game_2p_p1
-            if not common_gs_2p['game_over_global'] and not common_gs_2p['paused'] and \
-               p1_gs_2p['alive'] and p1_gs_2p.get('peca_atual'):
-                if code == "ArrowUp": handle_input_2p(1, "rotate"); action_processed_by_keyboard = True
-                elif code == "ArrowDown": handle_input_2p(1, "down"); action_processed_by_keyboard = True
-                elif code == "ArrowLeft": handle_input_2p(1, "left"); action_processed_by_keyboard = True
-                elif code == "ArrowRight": handle_input_2p(1, "right"); action_processed_by_keyboard = True
-
-        # Lógica para Player 2 (ASDW) - Apenas no modo 2 Players
-        if current_screen == "game_2p":
-            common_gs_2p = st.session_state.game_2p_common
-            p2_gs_2p = st.session_state.game_2p_p2
-            if not common_gs_2p['game_over_global'] and not common_gs_2p['paused'] and \
-               p2_gs_2p['alive'] and p2_gs_2p.get('peca_atual'):
-                if code == "KeyW": handle_input_2p(2, "rotate"); action_processed_by_keyboard = True
-                elif code == "KeyS": handle_input_2p(2, "down"); action_processed_by_keyboard = True
-                elif code == "KeyA": handle_input_2p(2, "left"); action_processed_by_keyboard = True
-                elif code == "KeyD": handle_input_2p(2, "right"); action_processed_by_keyboard = True
-        
-        if action_processed_by_keyboard:
-            st.rerun() # Re-executa o script para atualizar a UI após a ação do teclado
-
-    # Roteamento de telas (código existente)
     if st.session_state.screen == "menu":
         render_menu()
     elif st.session_state.screen == "commands":
