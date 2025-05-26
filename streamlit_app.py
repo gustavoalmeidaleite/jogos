@@ -2,8 +2,7 @@ import streamlit as st
 import time
 import random
 import copy
-import json # Para processar o JSON enviado pelo streamlit-events
-from streamlit_events import streamlit_events # Importar a biblioteca
+import json # Ainda útil se o componente JS enviar JSON, mas vamos simplificar
 
 # ─────────────────────────────────────────────
 # PARÂMETROS GERAIS (sem grandes alterações)
@@ -161,13 +160,12 @@ def limpar_linhas_completas(tab_game_data):
 def inicializar_estado_sessao():
     if "screen" not in st.session_state:
         st.session_state.screen = "menu"
-    if "active_game_keys" not in st.session_state:
-        st.session_state.active_game_keys = set()
-    if "system_key_tracker" not in st.session_state: # Para 'P' e 'Esc'
-        st.session_state.system_key_tracker = {"p_pressed": False, "escape_pressed": False}
+    # Estado para o componente de teclado customizado
+    if "keyboard_state" not in st.session_state:
+        st.session_state.keyboard_state = {"p1_actions": [], "p2_actions": [], "system_action": None, "system_key_just_pressed": {}}
 
 def _spawn_nova_peca(gs_dict_ou_prefixo, is_2p_player_num=None):
-    # ... (código original mantido, com pequena correção no balloon) ...
+    # ... (código original mantido) ...
     if is_2p_player_num:
         gs = st.session_state[f'{gs_dict_ou_prefixo}{is_2p_player_num}']
     else:
@@ -191,6 +189,7 @@ def _spawn_nova_peca(gs_dict_ou_prefixo, is_2p_player_num=None):
         return False
     return True
 
+
 def inicializar_jogo_1p():
     # ... (código original mantido) ...
     st.session_state.game_1p = {
@@ -199,8 +198,8 @@ def inicializar_jogo_1p():
         "game_over": False, "last_rot_time": 0,
     }
     _spawn_nova_peca('game_1p')
-    st.session_state.active_game_keys = set()
-    st.session_state.system_key_tracker = {"p_pressed": False, "escape_pressed": False}
+    st.session_state.keyboard_state = {"p1_actions": [], "p2_actions": [], "system_action": None, "system_key_just_pressed": {}}
+
 
 def inicializar_jogo_2p():
     # ... (código original mantido) ...
@@ -213,11 +212,10 @@ def inicializar_jogo_2p():
             "score": 0, "alive": True, "last_rot_time": 0,
         }
         _spawn_nova_peca('game_2p_p', i)
-    st.session_state.active_game_keys = set()
-    st.session_state.system_key_tracker = {"p_pressed": False, "escape_pressed": False}
+    st.session_state.keyboard_state = {"p1_actions": [], "p2_actions": [], "system_action": None, "system_key_just_pressed": {}}
 
 # ─────────────────────────────────────────────
-# LÓGICA DO JOGO E INPUT HANDLERS (semelhante ao anterior, mas simplificado)
+# LÓGICA DO JOGO E INPUT HANDLERS
 # ─────────────────────────────────────────────
 def logica_jogo_1p_tick():
     # ... (código original mantido) ...
@@ -238,30 +236,31 @@ def logica_jogo_1p_tick():
             gs['score'] += (linhas_limpas ** 2) * 100 if linhas_limpas > 0 else 0
             if not _spawn_nova_peca('game_1p'): return
 
-def handle_input_1p(action_key): 
+def handle_input_1p(action): 
+    # ... (código original mantido e funcional) ...
     gs = st.session_state.game_1p
     if gs['game_over'] or gs['paused'] or not gs.get('peca_atual'): return
 
     current_time = time.time()
-    action_taken_this_call = False # Para rastrear se a peça se moveu/rotacionou nesta chamada
+    action_taken_this_call = False 
 
-    if action_key == "arrowleft":
+    if action == "left":
         if not colisao(gs['tab_data'], gs['peca_atual'], gs['x'] - 1, gs['y_display']):
             gs['x'] -= 1; action_taken_this_call = True
-    elif action_key == "arrowright":
+    elif action == "right":
         if not colisao(gs['tab_data'], gs['peca_atual'], gs['x'] + 1, gs['y_display']):
             gs['x'] += 1; action_taken_this_call = True
-    elif action_key == "arrowdown": # Acelera a queda
+    elif action == "down":
          if not colisao(gs['tab_data'], gs['peca_atual'], gs['x'], gs['y_display'] + 1):
             gs['y_display'] += 1; action_taken_this_call = True
-         else: # Colidiu ao tentar descer via input
+         else: 
             gs['tab_data'] = fixar_peca_no_tabuleiro(gs['tab_data'], gs['peca_atual'], gs['x'], gs['y_display'])
             gs['tab_data'], linhas_limpas = limpar_linhas_completas(gs['tab_data'])
             gs['score'] += (linhas_limpas ** 2) * 100 if linhas_limpas > 0 else 0
             _spawn_nova_peca('game_1p')
-            return # Peça fixada, não precisa resetar last_drop_time
-    elif action_key == "arrowup": # Rotação
-        if current_time - gs.get('last_rot_time', 0) > 0.2: # Debounce para rotação
+            return 
+    elif action == "rotate":
+        if current_time - gs.get('last_rot_time', 0) > 0.2: 
             peca_rotacionada = rotacionar(gs['peca_atual'])
             new_x = gs['x']
             if new_x + largura_peca(peca_rotacionada) > (INNER_W // 2): new_x = (INNER_W // 2) - largura_peca(peca_rotacionada)
@@ -271,7 +270,8 @@ def handle_input_1p(action_key):
                 gs['last_rot_time'] = current_time; action_taken_this_call = True
     
     if action_taken_this_call:
-        gs['last_drop_time'] = time.time() # Reseta o tempo da queda natural se houve ação
+        gs['last_drop_time'] = time.time()
+
 
 def logica_jogo_2p_tick_player(player_idx):
     # ... (código original mantido) ...
@@ -296,9 +296,8 @@ def logica_jogo_2p_tick_player(player_idx):
             player_gs['score'] += (linhas_limpas ** 2) * 100 if linhas_limpas > 0 else 0
             if not _spawn_nova_peca('game_2p_p', player_idx): return
 
-
-def handle_input_2p(player_idx, action_key):
-    # ... (código semelhante ao handle_input_1p, adaptado para P2) ...
+def handle_input_2p(player_idx, action):
+    # ... (código original mantido e funcional) ...
     common_gs = st.session_state.game_2p_common
     player_gs = st.session_state[f'game_2p_p{player_idx}']
     if common_gs['game_over_global'] or common_gs['paused'] or not player_gs['alive'] or not player_gs.get('peca_atual'): return
@@ -306,21 +305,13 @@ def handle_input_2p(player_idx, action_key):
     current_time = time.time()
     action_taken_this_call = False
 
-    # Mapeamento de action_key para ações do P2 (ex: 'a' -> 'left')
-    mapped_action = action_key # Para P1, action_key já é o nome da ação
-    if player_idx == 2:
-        if action_key == 'a': mapped_action = 'left'
-        elif action_key == 'd': mapped_action = 'right'
-        elif action_key == 'w': mapped_action = 'rotate'
-        elif action_key == 's': mapped_action = 'down'
-
-    if mapped_action == "left":
+    if action == "left":
         if not colisao(player_gs['tab_data'], player_gs['peca_atual'], player_gs['x'] - 1, player_gs['y_display']):
             player_gs['x'] -= 1; action_taken_this_call = True
-    elif mapped_action == "right":
+    elif action == "right":
         if not colisao(player_gs['tab_data'], player_gs['peca_atual'], player_gs['x'] + 1, player_gs['y_display']):
             player_gs['x'] += 1; action_taken_this_call = True
-    elif mapped_action == "down":
+    elif action == "down":
         if not colisao(player_gs['tab_data'], player_gs['peca_atual'], player_gs['x'], player_gs['y_display'] + 1):
             player_gs['y_display'] += 1; action_taken_this_call = True
         else:
@@ -329,7 +320,7 @@ def handle_input_2p(player_idx, action_key):
             player_gs['score'] += (linhas_limpas ** 2) * 100 if linhas_limpas > 0 else 0
             _spawn_nova_peca('game_2p_p', player_idx)
             return
-    elif mapped_action == "rotate":
+    elif action == "rotate":
         if current_time - player_gs.get('last_rot_time', 0) > 0.2:
             peca_rotacionada = rotacionar(player_gs['peca_atual'])
             new_x = player_gs['x']
@@ -343,98 +334,97 @@ def handle_input_2p(player_idx, action_key):
         player_gs['last_drop_time'] = time.time()
 
 # ─────────────────────────────────────────────
-# JAVASCRIPT PARA streamlit-events
+# COMPONENTE DE TECLADO HTML/JS (Revisado)
 # ─────────────────────────────────────────────
-# Este JS será passado para o componente streamlit_events
-# Ele envia um objeto JSON com 'key' e 'type' ('keydown' ou 'keyup')
-# O nome do CustomEvent deve ser o mesmo que `event_name` em streamlit_events
-JS_CODE_FOR_STREAMLIT_EVENTS = """
+KEYBOARD_COMPONENT_HTML = """
+<!DOCTYPE html>
+<html><head><title>Keyboard Handler</title><style>body{margin:0;}</style></head>
+<body>
 <script>
-// Garante que os listeners sejam adicionados apenas uma vez ou de forma idempotente
-if (!window.keyboardListenersAttached) {
-    const relevantKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', 'W', 'A', 'S', 'D', 'p', 'P', 'Escape'];
+const pressedGameKeys = new Set();
+const P1_KEYS_MAP = { 'arrowleft': 'left', 'arrowright': 'right', 'arrowup': 'rotate', 'arrowdown': 'down' };
+const P2_KEYS_MAP = { 'a': 'left', 'd': 'right', 'w': 'rotate', 's': 'down' };
+const SYSTEM_KEYS_MAP = { 'p': 'toggle_pause', 'escape': 'quit_to_menu' };
+const ALL_RELEVANT_RAW_KEYS = [...Object.keys(P1_KEYS_MAP), ...Object.keys(P2_KEYS_MAP), ...Object.keys(SYSTEM_KEYS_MAP)];
+
+// Variaveis para debounce de teclas de sistema (P, Escape)
+let systemKeyLastProcessed = { 'p': 0, 'escape': 0 };
+const SYSTEM_KEY_DEBOUNCE_MS = 200; // 200ms debounce
+
+function sendStateToStreamlit() {
+    const state = { p1_actions: [], p2_actions: [], system_action: null };
     
-    document.addEventListener('keydown', function(event) {
-        // Previne comportamento padrão para teclas de jogo para evitar rolagem, etc.
-        if (relevantKeys.includes(event.key)) {
-            event.preventDefault();
+    pressedGameKeys.forEach(key => {
+        if (P1_KEYS_MAP[key]) {
+            state.p1_actions.push(P1_KEYS_MAP[key]);
+        } else if (P2_KEYS_MAP[key]) {
+            state.p2_actions.push(P2_KEYS_MAP[key]);
         }
-        // Envia o evento para o Streamlit através do CustomEvent que streamlit_events escuta
-        const keyboardEvent = {key: event.key, type: event.type};
-        document.dispatchEvent(new CustomEvent("generic_keyboard_event", {detail: keyboardEvent}));
     });
 
-    document.addEventListener('keyup', function(event) {
-        if (relevantKeys.includes(event.key)) {
-            event.preventDefault();
-        }
-        const keyboardEvent = {key: event.key, type: event.type};
-        document.dispatchEvent(new CustomEvent("generic_keyboard_event", {detail: keyboardEvent}));
-    });
-    window.keyboardListenersAttached = true;
-    // Envia um evento inicial para garantir que o componente está pronto
-    // document.dispatchEvent(new CustomEvent("generic_keyboard_event", {detail: {key: 'init', type: 'init'}}));
+    // Para teclas de sistema, processamos no keydown e aplicamos debounce
+    // O envio aqui é mais para limpar o 'system_action' se a tecla foi solta,
+    // mas a ação principal é no keydown.
+    // A lógica de 'system_action' no keydown é mais importante.
+
+    // Remove arrays vazios para limpar a saida
+    if (state.p1_actions.length === 0) delete state.p1_actions;
+    if (state.p2_actions.length === 0) delete state.p2_actions;
+    
+    Streamlit.setComponentValue(Object.keys(state).length > 0 ? state : null);
 }
+
+document.addEventListener('keydown', (event) => {
+    const rawKey = event.key.toLowerCase();
+    if (ALL_RELEVANT_RAW_KEYS.includes(rawKey)) {
+        event.preventDefault();
+        
+        if (SYSTEM_KEYS_MAP[rawKey]) { // É uma tecla de sistema
+            const now = Date.now();
+            if (now - systemKeyLastProcessed[rawKey] > SYSTEM_KEY_DEBOUNCE_MS) {
+                Streamlit.setComponentValue({ system_action: SYSTEM_KEYS_MAP[rawKey] });
+                systemKeyLastProcessed[rawKey] = now;
+            }
+        } else { // É uma tecla de jogo
+            if (!pressedGameKeys.has(rawKey)) {
+                pressedGameKeys.add(rawKey);
+                sendStateToStreamlit();
+            }
+        }
+    }
+});
+
+document.addEventListener('keyup', (event) => {
+    const rawKey = event.key.toLowerCase();
+    if (ALL_RELEVANT_RAW_KEYS.includes(rawKey)) {
+        event.preventDefault();
+        if (SYSTEM_KEYS_MAP[rawKey]) {
+            systemKeyLastProcessed[rawKey] = 0; // Reseta debounce ao soltar
+            // Envia estado nulo para system_action para limpar
+            // Mas é importante que o Python já tenha processado o keydown.
+            // A melhor forma é o Python consumir a ação de sistema e resetá-la.
+        } else {
+             if (pressedGameKeys.has(rawKey)) {
+                pressedGameKeys.delete(rawKey);
+                sendStateToStreamlit();
+            }
+        }
+    }
+});
+
+window.addEventListener('load', () => {
+    Streamlit.setFrameHeight(0); // Componente invisivel
+    sendStateToStreamlit(); // Envia estado inicial (vazio)
+});
 </script>
+</body></html>
 """
-
-def process_raw_keyboard_event(event_data_json):
-    """Processa um evento de teclado cru do streamlit-events e atualiza o estado."""
-    if not event_data_json:
-        return False # Nenhum evento
-
-    try:
-        event = json.loads(event_data_json) # streamlit-events retorna JSON como string
-    except (json.JSONDecodeError, TypeError):
-        # st.warning(f"Erro ao decodificar evento JSON: {event_data_json}")
-        return False
-
-    if not isinstance(event, dict) or "key" not in event or "type" not in event:
-        return False # Evento malformado
-
-    key = event["key"].lower() # Normaliza para minúsculas
-    event_type = event["type"]
-    action_taken = False
-
-    # Teclas de Jogo (Setas e ASDW)
-    game_keys_p1 = ["arrowleft", "arrowright", "arrowup", "arrowdown"]
-    game_keys_p2 = ["a", "d", "w", "s"] # Correspondem a left, right, rotate, down
-
-    if key in game_keys_p1 or key in game_keys_p2:
-        if event_type == "keydown":
-            st.session_state.active_game_keys.add(key)
-            action_taken = True
-        elif event_type == "keyup":
-            st.session_state.active_game_keys.discard(key)
-            action_taken = True # Liberar uma tecla também é uma "ação" para o loop
-    
-    # Teclas de Sistema ('p' para pause, 'escape' para quit)
-    if key == "p":
-        if event_type == "keydown" and not st.session_state.system_key_tracker["p_pressed"]:
-            st.session_state.system_key_tracker["p_pressed"] = True
-            # Ação de pause será tratada no loop de renderização principal
-            action_taken = True 
-        elif event_type == "keyup":
-            st.session_state.system_key_tracker["p_pressed"] = False 
-            # Não consideramos keyup de sistema como "action_taken" para forçar refresh imediato
-            # a menos que o estado do jogo realmente mude (como despausar).
-            # O refresh natural do loop vai pegar a mudança de p_pressed.
-    
-    if key == "escape":
-        if event_type == "keydown" and not st.session_state.system_key_tracker["escape_pressed"]:
-            st.session_state.system_key_tracker["escape_pressed"] = True
-            action_taken = True
-        elif event_type == "keyup":
-            st.session_state.system_key_tracker["escape_pressed"] = False
-
-    return action_taken
-
 
 # ─────────────────────────────────────────────
 # RENDERIZAÇÃO E TELAS (STREAMLIT)
 # ─────────────────────────────────────────────
 def render_menu():
-    # ... (código original dos botões de menu mantido) ...
+    # ... (código dos botões de menu mantido por enquanto) ...
     st.title("TETRIS com Streamlit")
     st.markdown("---")
     st.subheader("Desenvolvido por: Gustavo de Almeida Leite")
@@ -454,9 +444,8 @@ def render_menu():
         st.session_state.screen = "commands"
         st.rerun()
 
-
 def render_commands():
-    # ... (código da tela de comandos com texto atualizado, botão de voltar mantido) ...
+    # ... (tela de comandos atualizada, botão de voltar mantido) ...
     st.header("📜 Comandos do Teclado")
     st.markdown(f"""
     ### Controles Gerais (Durante o Jogo):
@@ -483,71 +472,90 @@ def render_commands():
         st.session_state.screen = "menu"
         st.rerun()
 
+def process_keyboard_input_for_game(keyboard_state, game_state, player_prefix, input_handler_func, player_idx=None):
+    """Processa as ações de jogo do teclado para um jogador."""
+    if not game_state['game_over'] and not game_state['paused'] and keyboard_state:
+        actions = keyboard_state.get(f"{player_prefix}_actions", [])
+        
+        # Lógica para tratar múltiplas ações (ex: esquerda + rotação)
+        # Prioridade: Movimento lateral > Rotação > Descida (ou processar todas se o handler permitir)
+        # Por simplicidade, processaremos todas as ações detectadas.
+        # Os handlers individuais (handle_input_1p/2p) já têm debounce para rotação.
+        
+        # Para evitar processar 'left' e 'right' simultaneamente se o JS enviar ambos (improvável com Set)
+        has_moved_lr = False
+        if "left" in actions:
+            if player_idx: input_handler_func(player_idx, "left")
+            else: input_handler_func("left")
+            has_moved_lr = True
+        if "right" in actions and not has_moved_lr:
+            if player_idx: input_handler_func(player_idx, "right")
+            else: input_handler_func("right")
+
+        if "rotate" in actions:
+            if player_idx: input_handler_func(player_idx, "rotate")
+            else: input_handler_func("rotate")
+        if "down" in actions:
+            if player_idx: input_handler_func(player_idx, "down")
+            else: input_handler_func("down")
 
 def render_game_1p():
     gs = st.session_state.game_1p
     
-    # Usar streamlit_events para capturar eventos crus de teclado
-    # O event_name "generic_keyboard_event" deve corresponder ao dispatchEvent no JS_CODE
-    raw_keyboard_event = streamlit_events(
-        event_name="generic_keyboard_event", 
-        js_code=JS_CODE_FOR_STREAMLIT_EVENTS,
-        default_value=None, # Importante para saber se houve evento novo
-        key="kb_listener_1p", # Key única para o componente
-        debounce_delay=0, # Sem debounce para máxima responsividade
-        override_height=0 # Componente invisível
-    )
+    # O componente HTML retorna um dicionário com o estado das teclas
+    # ou None se nenhuma tecla de jogo estiver ativa.
+    # Ações de sistema são enviadas com 'system_action'.
+    raw_keyboard_data = st.components.v1.html(KEYBOARD_COMPONENT_HTML, height=0)
 
-    # Processar o evento cru para atualizar st.session_state.active_game_keys e system_key_tracker
-    event_processed = process_raw_keyboard_event(raw_keyboard_event)
+    # Priorizar ações de sistema
+    if raw_keyboard_data and isinstance(raw_keyboard_data, dict) and "system_action" in raw_keyboard_data:
+        system_action = raw_keyboard_data["system_action"]
+        if system_action == "toggle_pause":
+            gs['paused'] = not gs['paused']
+            if not gs['paused']: gs['last_drop_time'] = time.time()
+            # Limpar a ação de sistema para não reprocessar no próximo rerun
+            st.session_state.keyboard_state["system_action"] = None 
+            st.rerun(); return 
+        elif system_action == "quit_to_menu":
+            st.session_state.screen = "menu"
+            st.rerun(); return
+    
+    # Atualiza o estado global do teclado com os dados recebidos (para teclas de jogo)
+    if raw_keyboard_data and isinstance(raw_keyboard_data, dict):
+        st.session_state.keyboard_state["p1_actions"] = raw_keyboard_data.get("p1_actions", [])
+    elif raw_keyboard_data is None : # Nenhuma tecla de jogo ativa
+         st.session_state.keyboard_state["p1_actions"] = []
 
-    # Lidar com ações de sistema (Pause, Quit)
-    if st.session_state.system_key_tracker["p_pressed"]: # Se 'P' foi pressionada (keydown)
-        gs['paused'] = not gs['paused']
-        if not gs['paused']: gs['last_drop_time'] = time.time() # Resetar tempo ao despausar
-        st.session_state.system_key_tracker["p_pressed"] = False # Consome a ação de 'P'
-        # Não precisa de st.rerun() aqui, o loop principal cuida disso
-        
-    if st.session_state.system_key_tracker["escape_pressed"]: # Se 'Esc' foi pressionada
-        st.session_state.screen = "menu"
-        st.session_state.system_key_tracker["escape_pressed"] = False # Consome
-        st.rerun() # Sair para o menu é imediato
-        return
 
-    # Processar inputs de jogo baseados nas teclas ativas
+    # Processar inputs de jogo
+    process_keyboard_input_for_game(st.session_state.keyboard_state, gs, "p1", handle_input_1p)
+
     if not gs['game_over'] and not gs['paused']:
-        for key_code in st.session_state.active_game_keys:
-            if key_code in ["arrowleft", "arrowright", "arrowup", "arrowdown"]: # Teclas do P1
-                handle_input_1p(key_code)
-        
         logica_jogo_1p_tick()
 
-
-    display_message = None # ... (lógica de display_message original)
-    if gs['game_over']: display_message = "GAME OVER"
+    display_message = None
+    if gs['game_over']: display_message = "FIM DE JOGO"
     elif gs['paused']: display_message = "PAUSADO (Pressione 'P')"
     
-    current_peca_info_1p = None # ... (lógica de current_peca_info_1p original)
+    current_peca_info_1p = None
     if not gs['game_over'] and gs.get('peca_atual'): 
         current_peca_info_1p = {"peca_atual": gs['peca_atual'], "x": gs['x'], "y_display": gs['y_display']}
 
-    tab_str = formatar_tabuleiro_para_exibicao( # ... (lógica de tab_str original)
+    tab_str = formatar_tabuleiro_para_exibicao(
         gs['tab_data'], gs['proxima_peca'], gs['score'], gs['level'],
         display_message, player_id=None, current_peca_info=current_peca_info_1p
     )
     game_placeholder = st.empty()
     game_placeholder.code(tab_str, language="text")
 
-    if gs['game_over']: # ... (lógica de game over original, botão de voltar mantido)
+    if gs['game_over']:
         st.error("FIM DE JOGO!")
         st.markdown("Pressione `Esc` para voltar ao Menu.")
-        if st.button("⬅️ Voltar ao Menu Principal", key="gameover_1p_back_menu_btn"):
-            st.session_state.screen = "menu"
-            st.rerun()
+        if st.button("⬅️ Voltar ao Menu Principal", key="gameover_1p_back_menu_btn"): # Botão mantido
+            st.session_state.screen = "menu"; st.rerun()
         return
 
-    # Loop principal de atualização do jogo
-    if not gs['game_over']: # Não fazer loop se game over
+    if not gs['game_over']:
         time.sleep(PYTHON_GAME_LOOP_INTERVAL)
         st.rerun()
 
@@ -557,53 +565,45 @@ def render_game_2p():
     p1_gs = st.session_state.game_2p_p1
     p2_gs = st.session_state.game_2p_p2
     
-    raw_keyboard_event = streamlit_events(
-        event_name="generic_keyboard_event", 
-        js_code=JS_CODE_FOR_STREAMLIT_EVENTS,
-        default_value=None,
-        key="kb_listener_2p", 
-        debounce_delay=0,
-        override_height=0
-    )
-    event_processed = process_raw_keyboard_event(raw_keyboard_event)
+    raw_keyboard_data = st.components.v1.html(KEYBOARD_COMPONENT_HTML, height=0)
 
-    if st.session_state.system_key_tracker["p_pressed"]:
-        common_gs['paused'] = not common_gs['paused']
-        if not common_gs['paused']:
-            if p1_gs['alive']: p1_gs['last_drop_time'] = time.time()
-            if p2_gs['alive']: p2_gs['last_drop_time'] = time.time()
-        st.session_state.system_key_tracker["p_pressed"] = False
-        
-    if st.session_state.system_key_tracker["escape_pressed"]:
-        st.session_state.screen = "menu"
-        st.session_state.system_key_tracker["escape_pressed"] = False
-        st.rerun()
-        return
+    if raw_keyboard_data and isinstance(raw_keyboard_data, dict) and "system_action" in raw_keyboard_data:
+        system_action = raw_keyboard_data["system_action"]
+        if system_action == "toggle_pause":
+            common_gs['paused'] = not common_gs['paused']
+            if not common_gs['paused']:
+                if p1_gs['alive']: p1_gs['last_drop_time'] = time.time()
+                if p2_gs['alive']: p2_gs['last_drop_time'] = time.time()
+            st.session_state.keyboard_state["system_action"] = None
+            st.rerun(); return
+        elif system_action == "quit_to_menu":
+            st.session_state.screen = "menu"; st.rerun(); return
+    
+    if raw_keyboard_data and isinstance(raw_keyboard_data, dict):
+        st.session_state.keyboard_state["p1_actions"] = raw_keyboard_data.get("p1_actions", [])
+        st.session_state.keyboard_state["p2_actions"] = raw_keyboard_data.get("p2_actions", [])
+    elif raw_keyboard_data is None:
+        st.session_state.keyboard_state["p1_actions"] = []
+        st.session_state.keyboard_state["p2_actions"] = []
+
+
+    if p1_gs['alive']:
+        process_keyboard_input_for_game(st.session_state.keyboard_state, p1_gs, "p1", handle_input_2p, player_idx=1)
+    if p2_gs['alive']:
+        process_keyboard_input_for_game(st.session_state.keyboard_state, p2_gs, "p2", handle_input_2p, player_idx=2)
+
 
     if not common_gs['game_over_global'] and not common_gs['paused']:
-        # Player 1
-        if p1_gs['alive']:
-            for key_code in st.session_state.active_game_keys:
-                if key_code in ["arrowleft", "arrowright", "arrowup", "arrowdown"]:
-                    handle_input_2p(1, key_code) # handle_input_2p precisa saber qual jogador e a tecla crua
-        # Player 2
-        if p2_gs['alive']:
-            for key_code in st.session_state.active_game_keys:
-                if key_code in ["a", "d", "w", "s"]:
-                    handle_input_2p(2, key_code)
-        
         if p1_gs['alive']: logica_jogo_2p_tick_player(1)
         if p2_gs['alive']: logica_jogo_2p_tick_player(2)
-
-    # UI para 2 jogadores (semelhante ao anterior, sem botões de controle de jogo)
-    st.subheader(f"Nível Comum: {common_gs['level']}") # ... (resto da UI 2P original)
+    
+    st.subheader(f"Nível Comum: {common_gs['level']}")
     if common_gs['paused']: st.warning("JOGO PAUSADO (Pressione 'P' para retomar)")
     if common_gs['game_over_global']: st.error("FIM DE JOGO PARA AMBOS!")
 
-    game_area_placeholder = st.empty()
+    game_area_placeholder = st.empty() # ... (UI 2P como antes, sem botões de controle)
     with game_area_placeholder.container():
         col_p1, col_score_info, col_p2 = st.columns([2,1,2]) 
-
         with col_p1:
             st.markdown("<h4 style='text-align: center;'>Jogador 1 (Setas)</h4>", unsafe_allow_html=True)
             msg1 = None; current_peca_info_p1 = None
@@ -616,7 +616,7 @@ def render_game_2p():
         with col_score_info:
             st.markdown("<h4 style='text-align: center;'>Placar</h4>", unsafe_allow_html=True)
             st.markdown(f"<p style='font-size: 1.2em; text-align: center;'>P1: {p1_gs['score']:05}</p>", unsafe_allow_html=True)
-            st.markdown(f"<p style_list='font-size: 1.2em; text-align: center;'>P2: {p2_gs['score']:05}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style_list='font-size: 1.2em; text-align: center;'>P2: {p2_gs['score']:05}</p>", unsafe_allow_html=True) # Corrigido style_list para style
             st.markdown("---")
             st.caption("P: Pausar/Retomar")
             st.caption("Esc: Sair para Menu")
@@ -630,15 +630,15 @@ def render_game_2p():
             tab_str_p2 = formatar_tabuleiro_para_exibicao(p2_gs['tab_data'], p2_gs['proxima_peca'], player_id=2, msg_extra=msg2, current_peca_info=current_peca_info_p2)
             st.code(tab_str_p2, language="text")
 
-    if common_gs['game_over_global']: # ... (lógica de game over 2P original, botão de voltar mantido)
-        winner_msg = "Empate!"
+
+    if common_gs['game_over_global']: 
+        winner_msg = "Empate!" # ... (lógica de game over 2P com botão de voltar mantido)
         if p1_gs['score'] > p2_gs['score']: winner_msg = "Jogador 1 Vence!"
         elif p2_gs['score'] > p1_gs['score']: winner_msg = "Jogador 2 Vence!"
         st.subheader(winner_msg)
         st.markdown("Pressione `Esc` para voltar ao Menu.")
         if st.button("⬅️ Voltar ao Menu Principal", key="gameover_2p_back_menu_btn"):
-            st.session_state.screen = "menu"
-            st.rerun()
+            st.session_state.screen = "menu"; st.rerun()
         return
 
     if not common_gs['game_over_global']:
@@ -646,11 +646,11 @@ def render_game_2p():
         st.rerun()
 
 # ─────────────────────────────────────────────
-# MAIN APP (sem grandes alterações)
+# MAIN APP
 # ─────────────────────────────────────────────
 def main():
-    st.set_page_config(layout="wide", page_title="Streamlit Tetris - streamlit-events")
-    inicializar_estado_sessao() # Garante que os estados de teclado sejam inicializados
+    st.set_page_config(layout="wide", page_title="Streamlit Tetris - Custom Component")
+    inicializar_estado_sessao()
 
     if st.session_state.screen == "menu": render_menu()
     elif st.session_state.screen == "commands": render_commands()
@@ -660,8 +660,7 @@ def main():
         st.title("👋 Obrigado por jogar!")
         st.balloons()
         if st.button("⬅️ Voltar ao Menu Principal", key="quit_to_menu_btn"):
-            st.session_state.screen = "menu"
-            st.rerun()
+            st.session_state.screen = "menu"; st.rerun()
 
 if __name__ == "__main__":
     main()
